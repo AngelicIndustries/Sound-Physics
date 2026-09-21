@@ -36,12 +36,12 @@ import java.util.ListIterator;
 import java.util.regex.Pattern;
 
 @Mod(modid = SoundPhysics.modid, name = SoundPhysics.modName, acceptedMinecraftVersions = SoundPhysics.mcVersion, version = SoundPhysics.version, guiFactory = "com.sonicether.soundphysics.SPGuiFactory",
-	dependencies="before:computronics;required-after:gtnhmixins@[2.0.0,)") // Dependencies to make sure that SP's config is loaded before patching Computronics
+	dependencies="before:computronics;required-after:unimixins") // Dependencies to make sure that SP's config is loaded before patching Computronics
 public class SoundPhysics {
 
-	public static final String modid = "@MODID@";
-	public static final String modName = "@MODNAME@";
-	public static final String version = "@VERSION@";
+	public static final String modid = "soundphysics";
+	public static final String modName = "Sound-Physics";
+	public static final String version = Tags.VERSION;
 	public static final String mcVersion = "1.7.10";
 
 	private static final Pattern rainPattern = Pattern.compile(".*rain.*");
