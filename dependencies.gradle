@@ -49,4 +49,5 @@ dependencies {
     // Pure compile
 
     // Test
+    testImplementation("junit:junit:4.13.2")
 }

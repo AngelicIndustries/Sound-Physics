@@ -26,6 +26,7 @@ public abstract class MixinSourceLWJGLOpenAL extends Source {
             at = @At(value = "INVOKE", target = "Lpaulscode/sound/Channel;play()V", shift = At.Shift.AFTER, remap = false),
             remap = false)
     private void injectOnPlaySound(Channel c, CallbackInfo ci) {
-        SoundPhysics.onPlaySound(this.position.x, this.position.y, this.position.z, this.channelOpenAL.ALSource.get(0));
+        SoundPhysics.onPlaySound(this.position.x, this.position.y, this.position.z, this.channelOpenAL.ALSource.get(0),
+                this.attModel);
     }
 }

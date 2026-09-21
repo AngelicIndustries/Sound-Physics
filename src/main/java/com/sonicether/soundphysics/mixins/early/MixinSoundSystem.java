@@ -1,6 +1,7 @@
 package com.sonicether.soundphysics.mixins.early;
 
 import com.sonicether.soundphysics.SoundPhysics;
+import com.sonicether.soundphysics.SoundPhysicsCompatibility;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Overwrite;
 import org.spongepowered.asm.mixin.Shadow;
@@ -21,24 +22,27 @@ public abstract class MixinSoundSystem {
 
     /**
      * @author Mist475 (adapted from Daipenger asm)
-     * @reason If other mods mess with this they're bound to be incompatible either way
+     * @reason Apply Sound Physics' configured rolloff to positional sources while preserving intentional NONE sources.
      */
     @Overwrite(remap = false)
     public void newSource(boolean priority, String sourcename, URL url, String identifier, boolean toLoop, float x, float y, float z, int attmodel, float distOrRoll) {
-        this.CommandQueue(new CommandObject(10, priority, false, toLoop, sourcename, new FilenameURL(url, identifier), x, y, z, SoundPhysics.attenuationModel, SoundPhysics.globalRolloffFactor));
+        this.CommandQueue(new CommandObject(10, priority, false, toLoop, sourcename, new FilenameURL(url, identifier), x, y, z,
+                SoundPhysicsCompatibility.selectAttenuationModel(attmodel, SoundPhysics.attenuationModel),
+                SoundPhysicsCompatibility.selectDistanceOrRolloff(attmodel, distOrRoll, SoundPhysics.globalRolloffFactor)));
         this.commandThread.interrupt();
     }
 
     /**
      * @author Mist475 (adapted from Daipenger asm)
-     * @reason If other mods mess with this they're bound to be incompatible either way
-     * This overload didn't have asm, just to be sure I've included it here as well, but it probably doesn't get used
+     * @reason Keep the filename overload consistent with the URL overload, including NONE-source compatibility.
      */
     @Overwrite(remap = false)
     public void newSource(boolean priority, String sourcename, String filename,
                           boolean toLoop, float x, float y, float z,
                           int attmodel, float distOrRoll) {
-        this.CommandQueue(new CommandObject(10, priority, false, toLoop, sourcename, new FilenameURL(filename), x, y, z, SoundPhysics.attenuationModel, SoundPhysics.globalRolloffFactor));
+        this.CommandQueue(new CommandObject(10, priority, false, toLoop, sourcename, new FilenameURL(filename), x, y, z,
+                SoundPhysicsCompatibility.selectAttenuationModel(attmodel, SoundPhysics.attenuationModel),
+                SoundPhysicsCompatibility.selectDistanceOrRolloff(attmodel, distOrRoll, SoundPhysics.globalRolloffFactor)));
         this.commandThread.interrupt();
     }
 }

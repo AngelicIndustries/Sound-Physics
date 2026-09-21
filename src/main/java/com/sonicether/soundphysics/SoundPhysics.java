@@ -339,7 +339,12 @@ public class SoundPhysics {
 	 */
 	// For sounds that get played normally
 	public static void onPlaySound(final float posX, final float posY, final float posZ, final int sourceID) {
-		onPlaySound(posX, posY, posZ, sourceID, lastSoundCategory, lastSoundName);
+		onPlaySound(posX, posY, posZ, sourceID, lastSoundCategory, lastSoundName, attenuationModel);
+	}
+
+	public static void onPlaySound(final float posX, final float posY, final float posZ, final int sourceID,
+			final int sourceAttenuationModel) {
+		onPlaySound(posX, posY, posZ, sourceID, lastSoundCategory, lastSoundName, sourceAttenuationModel);
 	}
 
 	/**
@@ -347,14 +352,28 @@ public class SoundPhysics {
 	 */
 	// For sounds that get played using OpenAL directly or just not using the minecraft sound system
 	public static void onPlaySoundAL(final float posX, final float posY, final float posZ, final int sourceID) {
-		onPlaySound(posX, posY, posZ, sourceID, SoundCategory.BLOCKS, "null");
+		onPlaySound(posX, posY, posZ, sourceID, SoundCategory.BLOCKS, "null", attenuationModel);
 	}
 
 	/**
 	 * CALLED BY Mixin INJECTED CODE!
 	 */
-	public static void onPlaySound(final float posX, final float posY, final float posZ, final int sourceID, SoundCategory soundCat, String soundName) {
+	public static void onPlaySound(final float posX, final float posY, final float posZ, final int sourceID,
+			SoundCategory soundCat, String soundName) {
+		onPlaySound(posX, posY, posZ, sourceID, soundCat, soundName, attenuationModel);
+	}
+
+	/**
+	 * CALLED BY Mixin INJECTED CODE!
+	 */
+	public static void onPlaySound(final float posX, final float posY, final float posZ, final int sourceID,
+			SoundCategory soundCat, String soundName, final int sourceAttenuationModel) {
 		//log(String.valueOf(posX)+" "+String.valueOf(posY)+" "+String.valueOf(posZ)+" - "+String.valueOf(sourceID)+" - "+soundCat.toString()+" - "+soundName);
+		removeTrackedSource(sourceID);
+		if (!SoundPhysicsCompatibility.shouldEvaluateEnvironment(sourceAttenuationModel)) {
+			clearEnvironment(sourceID);
+			return;
+		}
 		if (Config.noteBlockEnable && soundCat == SoundCategory.RECORDS && noteBlockPattern.matcher(soundName).matches()) soundCat = SoundCategory.BLOCKS;
 		evaluateEnvironment(sourceID, posX, posY, posZ,soundCat,soundName);
 		if (!Config.dynamicEnvironementEvalutaion) return;
@@ -363,6 +382,23 @@ public class SoundPhysics {
 		Source tmp = new Source(sourceID,posX,posY,posZ,soundCat,soundName);
 		if (source_check(tmp)) return;
 		source_list.add(tmp);
+	}
+
+	private static void removeTrackedSource(final int sourceID) {
+		if (source_list == null) return;
+		// OpenAL channels are reused, so an old dynamic entry must not reapply its environment to the new source.
+		synchronized (source_list) {
+			source_list.removeIf(source -> source.sourceID == sourceID);
+		}
+	}
+
+	private static void clearEnvironment(final int sourceID) {
+		for (int send = 0; send < 4; send++) {
+			AL11.alSource3i(sourceID, EFX10.AL_AUXILIARY_SEND_FILTER, EFX10.AL_EFFECTSLOT_NULL, send,
+					EFX10.AL_FILTER_NULL);
+		}
+		AL10.alSourcei(sourceID, EFX10.AL_DIRECT_FILTER, EFX10.AL_FILTER_NULL);
+		AL10.alSourcef(sourceID, EFX10.AL_AIR_ABSORPTION_FACTOR, 0.0f);
 	}
 
 	/**
