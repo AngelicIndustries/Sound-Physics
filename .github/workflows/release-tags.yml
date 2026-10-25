@@ -9,10 +9,10 @@ permissions:
 
 jobs:
   release:
-    uses: JackOfNoneTrades/67minecraft-gradle-publish/.github/workflows/gtnh-release-with-67minecraft.yml@1.0.1
+    # No 67minecraft project is configured for this mod.
+    uses: GTNewHorizons/GTNH-Actions-Workflows/.github/workflows/release-tags.yml@master
     secrets:
       MAVEN_USER: ${{ secrets.MAVEN_USER }}
       MAVEN_PASSWORD: ${{ secrets.MAVEN_PASSWORD }}
       CURSEFORGE_TOKEN: ${{ secrets.CURSEFORGE_TOKEN }}
       MODRINTH_TOKEN: ${{ secrets.MODRINTH_TOKEN }}
-      SIX_SEVEN_TOKEN: ${{ secrets.SIX_SEVEN_TOKEN }}
