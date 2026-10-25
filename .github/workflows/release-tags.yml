@@ -3,12 +3,14 @@ name: Release tagged build
 on:
   push:
     tags: [ '*' ]
+  workflow_dispatch:
 
 permissions:
   contents: write
 
 jobs:
   release:
+    if: startsWith(github.ref, 'refs/tags/')
     # No 67minecraft project is configured for this mod.
     uses: GTNewHorizons/GTNH-Actions-Workflows/.github/workflows/release-tags.yml@master
     secrets:
