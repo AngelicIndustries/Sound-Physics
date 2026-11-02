@@ -26,6 +26,7 @@ public abstract class MixinSoundSystem {
      */
     @Overwrite(remap = false)
     public void newSource(boolean priority, String sourcename, URL url, String identifier, boolean toLoop, float x, float y, float z, int attmodel, float distOrRoll) {
+        SoundPhysicsCompatibility.rememberRange(sourcename, attmodel, distOrRoll);
         this.CommandQueue(new CommandObject(10, priority, false, toLoop, sourcename, new FilenameURL(url, identifier), x, y, z,
                 SoundPhysicsCompatibility.selectAttenuationModel(attmodel, SoundPhysics.attenuationModel),
                 SoundPhysicsCompatibility.selectDistanceOrRolloff(attmodel, distOrRoll, SoundPhysics.globalRolloffFactor)));
@@ -40,6 +41,7 @@ public abstract class MixinSoundSystem {
     public void newSource(boolean priority, String sourcename, String filename,
                           boolean toLoop, float x, float y, float z,
                           int attmodel, float distOrRoll) {
+        SoundPhysicsCompatibility.rememberRange(sourcename, attmodel, distOrRoll);
         this.CommandQueue(new CommandObject(10, priority, false, toLoop, sourcename, new FilenameURL(filename), x, y, z,
                 SoundPhysicsCompatibility.selectAttenuationModel(attmodel, SoundPhysics.attenuationModel),
                 SoundPhysicsCompatibility.selectDistanceOrRolloff(attmodel, distOrRoll, SoundPhysics.globalRolloffFactor)));
