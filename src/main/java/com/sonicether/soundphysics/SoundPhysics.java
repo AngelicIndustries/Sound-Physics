@@ -40,7 +40,12 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Pattern;
 
 @Mod(modid = SoundPhysics.modid, name = SoundPhysics.modName, acceptedMinecraftVersions = SoundPhysics.mcVersion, version = SoundPhysics.version, guiFactory = "com.sonicether.soundphysics.SPGuiFactory",
-	dependencies="before:computronics;required-after:unimixins") // Dependencies to make sure that SP's config is loaded before patching Computronics
+	dependencies="before:computronics;required-after:unimixins", // Dependencies to make sure that SP's config is loaded before patching Computronics
+	customProperties = {
+		@Mod.CustomProperty(k = "license", v = "GPLv3"),
+		@Mod.CustomProperty(k = "issueTrackerUrl", v = "https://github.com/AngelicIndustries/Sound-Physics/issues"),
+		@Mod.CustomProperty(k = "iconFile", v = "assets/soundphysics/logo.png"),
+		@Mod.CustomProperty(k = "backgroundFile", v = "assets/soundphysics/background.png") })
 public class SoundPhysics {
 
 	public static final String modid = "soundphysics";

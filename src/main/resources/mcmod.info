@@ -5,7 +5,8 @@
   "description": "Provides realistic sound attenuation, reverberation, and absorption through blocks.",
   "mcversion": "$minecraftVersion",
   "version": "$modVersion",
-  "url": "https://github.com/JackOfNoneTrades/Sound-Physics",
-  "authorList": ["Sonic Ether","daipenger","djpadbit","Mist475"]
+  "url": "https://github.com/AngelicIndustries/Sound-Physics",
+  "authorList": ["Sonic Ether", "daipenger", "djpadbit", "Mist475", "Angelic Industries"],
+  "logoFile": "assets/soundphysics/logo.png"
 }
 ]
