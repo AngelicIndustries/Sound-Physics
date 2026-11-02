@@ -31,8 +31,12 @@ import java.nio.ByteOrder;
 import java.nio.FloatBuffer;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Iterator;
 import java.util.List;
 import java.util.ListIterator;
+import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Pattern;
 
 @Mod(modid = SoundPhysics.modid, name = SoundPhysics.modName, acceptedMinecraftVersions = SoundPhysics.mcVersion, version = SoundPhysics.version, guiFactory = "com.sonicether.soundphysics.SPGuiFactory",
@@ -101,10 +105,21 @@ public class SoundPhysics {
 	public static float globalReverbMultiplier = 0.7f * Config.globalReverbGain;
 	public static double soundDistanceAllowance = Config.soundDistanceAllowance;
 
+	// Muffling requested by other mods, such as Enhanced Visuals for explosions and drowning, layered over each source's
+	// own occlusion and reverb. Sources keep their own environment so the muffle can change while they play.
+	private static final Object efxLock = new Object();
+	private static final Map<String, Float> muffleRequests = new ConcurrentHashMap<>();
+	private static final Map<Integer, float[]> environments = new ConcurrentHashMap<>();
+	private static final Set<Integer> unmuffled = ConcurrentHashMap.newKeySet();
+	private static volatile float muffle;
+	private static volatile boolean efxReady;
+
 	/**
 	 * CALLED BY Mixin INJECTED CODE!
 	 */
 	public static void init() {
+		environments.clear();
+		unmuffled.clear();
 		setupEFX();
 		mc = Minecraft.getMinecraft();
 		setupThread();
@@ -318,6 +333,36 @@ public class SoundPhysics {
 		checkErrorLog("Error creating lowpass filters!");
 
 		applyConfigChanges();
+		efxReady = true;
+	}
+
+	/**
+	 * Muffles every sound except interface sounds, on top of their occlusion and reverb, until set back to zero. The
+	 * highs go first and everything gets somewhat quieter. Several mods can muffle at once; the strongest one wins.
+	 *
+	 * @param owner  who is asking, so each caller can change or clear only its own request
+	 * @param amount from 0, no muffling, to 1, only muffled lows at half volume
+	 * @return false when EFX is unavailable and nothing can be muffled, so callers can fall back to lowering volume
+	 */
+	public static boolean setMuffle(final String owner, final float amount) {
+		if (!efxReady) return false;
+		if (amount > 0.001f) muffleRequests.put(owner, Math.min(1.0f, amount));
+		else muffleRequests.remove(owner);
+		float strongest = 0.0f;
+		for (final float request : muffleRequests.values()) strongest = Math.max(strongest, request);
+		if (Math.abs(strongest - muffle) < 0.01f && (strongest > 0.0f || muffle == 0.0f)) return true;
+		muffle = strongest;
+		synchronized (efxLock) {
+			final Iterator<Map.Entry<Integer, float[]>> iterator = environments.entrySet().iterator();
+			while (iterator.hasNext()) {
+				final Map.Entry<Integer, float[]> entry = iterator.next();
+				final int sourceID = entry.getKey();
+				final int state = AL10.alIsSource(sourceID) ? AL10.alGetSourcei(sourceID, AL10.AL_SOURCE_STATE) : AL10.AL_STOPPED;
+				if (state == AL10.AL_PLAYING || state == AL10.AL_PAUSED) applyEnvironment(sourceID, entry.getValue());
+				else iterator.remove();
+			}
+		}
+		return true;
 	}
 
 	/**
@@ -370,6 +415,8 @@ public class SoundPhysics {
 			SoundCategory soundCat, String soundName, final int sourceAttenuationModel) {
 		//log(String.valueOf(posX)+" "+String.valueOf(posY)+" "+String.valueOf(posZ)+" - "+String.valueOf(sourceID)+" - "+soundCat.toString()+" - "+soundName);
 		removeTrackedSource(sourceID);
+		if (soundCat == SoundCategory.MASTER) unmuffled.add(sourceID);
+		else unmuffled.remove(sourceID);
 		if (!SoundPhysicsCompatibility.shouldEvaluateEnvironment(sourceAttenuationModel)) {
 			clearEnvironment(sourceID);
 			return;
@@ -393,12 +440,9 @@ public class SoundPhysics {
 	}
 
 	private static void clearEnvironment(final int sourceID) {
-		for (int send = 0; send < 4; send++) {
-			AL11.alSource3i(sourceID, EFX10.AL_AUXILIARY_SEND_FILTER, EFX10.AL_EFFECTSLOT_NULL, send,
-					EFX10.AL_FILTER_NULL);
-		}
-		AL10.alSourcei(sourceID, EFX10.AL_DIRECT_FILTER, EFX10.AL_FILTER_NULL);
-		AL10.alSourcef(sourceID, EFX10.AL_AIR_ABSORPTION_FACTOR, 0.0f);
+		final float[] none = new float[0];
+		environments.put(sourceID, none);
+		applyEnvironment(sourceID, none);
 	}
 
 	/**
@@ -866,29 +910,50 @@ public class SoundPhysics {
 			final float sendGain2, final float sendGain3, final float sendCutoff0, final float sendCutoff1,
 			final float sendCutoff2, final float sendCutoff3, final float directCutoff, final float directGain,
 			final float airAbsorptionFactor) {
-		// Set reverb send filter values and set source to send to all reverb fx
-		// slots
-		EFX10.alFilterf(sendFilter0, EFX10.AL_LOWPASS_GAIN, sendGain0);
-		EFX10.alFilterf(sendFilter0, EFX10.AL_LOWPASS_GAINHF, sendCutoff0);
-		AL11.alSource3i(sourceID, EFX10.AL_AUXILIARY_SEND_FILTER, auxFXSlot0, 0, sendFilter0);
+		final float[] environment = { sendGain0, sendGain1, sendGain2, sendGain3, sendCutoff0, sendCutoff1, sendCutoff2,
+				sendCutoff3, directCutoff, directGain, airAbsorptionFactor };
+		environments.put(sourceID, environment);
+		applyEnvironment(sourceID, environment);
+	}
 
-		EFX10.alFilterf(sendFilter1, EFX10.AL_LOWPASS_GAIN, sendGain1);
-		EFX10.alFilterf(sendFilter1, EFX10.AL_LOWPASS_GAINHF, sendCutoff1);
-		AL11.alSource3i(sourceID, EFX10.AL_AUXILIARY_SEND_FILTER, auxFXSlot1, 1, sendFilter1);
+	/**
+	 * Applies a source's environment with the current muffle on top. An empty environment means no occlusion or reverb.
+	 * The filter objects are shared and filled per source, so the sound, environment and client threads take turns.
+	 */
+	private static void applyEnvironment(final int sourceID, final float[] environment) {
+		final float muffled = unmuffled.contains(sourceID) ? 0.0f : muffle;
+		final float highs = 1.0f - muffled, level = 1.0f - 0.5f * muffled;
+		synchronized (efxLock) {
+			if (environment.length == 0) {
+				for (int send = 0; send < 4; send++) {
+					AL11.alSource3i(sourceID, EFX10.AL_AUXILIARY_SEND_FILTER, EFX10.AL_EFFECTSLOT_NULL, send,
+							EFX10.AL_FILTER_NULL);
+				}
+				if (muffled > 0.0f) {
+					EFX10.alFilterf(directFilter0, EFX10.AL_LOWPASS_GAIN, level);
+					EFX10.alFilterf(directFilter0, EFX10.AL_LOWPASS_GAINHF, highs);
+					AL10.alSourcei(sourceID, EFX10.AL_DIRECT_FILTER, directFilter0);
+				} else {
+					AL10.alSourcei(sourceID, EFX10.AL_DIRECT_FILTER, EFX10.AL_FILTER_NULL);
+				}
+				AL10.alSourcef(sourceID, EFX10.AL_AIR_ABSORPTION_FACTOR, 0.0f);
+				return;
+			}
+			// Set reverb send filter values and set source to send to all reverb fx slots
+			final int[] slots = { auxFXSlot0, auxFXSlot1, auxFXSlot2, auxFXSlot3 };
+			final int[] filters = { sendFilter0, sendFilter1, sendFilter2, sendFilter3 };
+			for (int send = 0; send < 4; send++) {
+				EFX10.alFilterf(filters[send], EFX10.AL_LOWPASS_GAIN, environment[send] * level);
+				EFX10.alFilterf(filters[send], EFX10.AL_LOWPASS_GAINHF, environment[4 + send] * highs);
+				AL11.alSource3i(sourceID, EFX10.AL_AUXILIARY_SEND_FILTER, slots[send], send, filters[send]);
+			}
 
-		EFX10.alFilterf(sendFilter2, EFX10.AL_LOWPASS_GAIN, sendGain2);
-		EFX10.alFilterf(sendFilter2, EFX10.AL_LOWPASS_GAINHF, sendCutoff2);
-		AL11.alSource3i(sourceID, EFX10.AL_AUXILIARY_SEND_FILTER, auxFXSlot2, 2, sendFilter2);
+			EFX10.alFilterf(directFilter0, EFX10.AL_LOWPASS_GAIN, environment[9] * level);
+			EFX10.alFilterf(directFilter0, EFX10.AL_LOWPASS_GAINHF, environment[8] * highs);
+			AL10.alSourcei(sourceID, EFX10.AL_DIRECT_FILTER, directFilter0);
 
-		EFX10.alFilterf(sendFilter3, EFX10.AL_LOWPASS_GAIN, sendGain3);
-		EFX10.alFilterf(sendFilter3, EFX10.AL_LOWPASS_GAINHF, sendCutoff3);
-		AL11.alSource3i(sourceID, EFX10.AL_AUXILIARY_SEND_FILTER, auxFXSlot3, 3, sendFilter3);
-
-		EFX10.alFilterf(directFilter0, EFX10.AL_LOWPASS_GAIN, directGain);
-		EFX10.alFilterf(directFilter0, EFX10.AL_LOWPASS_GAINHF, directCutoff);
-		AL10.alSourcei(sourceID, EFX10.AL_DIRECT_FILTER, directFilter0);
-
-		AL10.alSourcef(sourceID, EFX10.AL_AIR_ABSORPTION_FACTOR, MathHelper.clamp_float(Config.airAbsorption * airAbsorptionFactor,0.0f,10.0f));
+			AL10.alSourcef(sourceID, EFX10.AL_AIR_ABSORPTION_FACTOR, MathHelper.clamp_float(Config.airAbsorption * environment[10],0.0f,10.0f));
+		}
 	}
 
 	/**
