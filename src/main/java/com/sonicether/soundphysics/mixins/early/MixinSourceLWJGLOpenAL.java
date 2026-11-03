@@ -25,6 +25,12 @@ public abstract class MixinSourceLWJGLOpenAL extends Source {
     @Unique
     private float soundphysics$referenceDistance = -1;
 
+    @Unique
+    private SoundPhysicsCompatibility.PendingSound soundphysics$sound;
+
+    @Unique
+    private boolean soundphysics$soundLooked;
+
     public MixinSourceLWJGLOpenAL(boolean priority, boolean toStream, boolean toLoop, String sourcename, FilenameURL filenameURL, SoundBuffer soundBuffer, float x, float y, float z, int attModel, float distOrRoll, boolean temporary) {
         super(priority, toStream, toLoop, sourcename, filenameURL, soundBuffer, x, y, z, attModel, distOrRoll, temporary);
     }
@@ -38,7 +44,15 @@ public abstract class MixinSourceLWJGLOpenAL extends Source {
             soundphysics$referenceDistance = SoundPhysicsCompatibility.takeReferenceDistance(this.sourcename);
         AL10.alSourcef(this.channelOpenAL.ALSource.get(0), AL10.AL_REFERENCE_DISTANCE,
                 this.attModel == SoundSystemConfig.ATTENUATION_ROLLOFF ? soundphysics$referenceDistance : 1.0F);
-        SoundPhysics.onPlaySound(this.position.x, this.position.y, this.position.z, this.channelOpenAL.ALSource.get(0),
-                this.attModel);
+        if (!soundphysics$soundLooked) {
+            soundphysics$soundLooked = true;
+            soundphysics$sound = SoundPhysicsCompatibility.takeSound(this.sourcename);
+        }
+        if (soundphysics$sound != null)
+            SoundPhysics.onPlaySound(this.position.x, this.position.y, this.position.z, this.channelOpenAL.ALSource.get(0),
+                    soundphysics$sound.category, soundphysics$sound.name, this.attModel);
+        else // Played without Minecraft's sound manager (MAtmos, say): fall back to the last queued sound
+            SoundPhysics.onPlaySound(this.position.x, this.position.y, this.position.z, this.channelOpenAL.ALSource.get(0),
+                    this.attModel);
     }
 }

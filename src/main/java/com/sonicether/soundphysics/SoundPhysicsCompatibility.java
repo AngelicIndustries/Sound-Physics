@@ -1,5 +1,7 @@
 package com.sonicether.soundphysics;
 
+import net.minecraft.client.audio.SoundCategory;
+
 import paulscode.sound.SoundSystemConfig;
 
 import java.util.Map;
@@ -41,6 +43,33 @@ public final class SoundPhysicsCompatibility {
     public static float takeReferenceDistance(String sourcename) {
         Float range = sourcename == null ? null : REQUESTED_RANGES.remove(sourcename);
         return range == null ? 1.0F : Math.max(1.0F, range / VANILLA_RANGE);
+    }
+
+    /** A queued sound's category and name, by source name. */
+    public static final class PendingSound {
+        public final SoundCategory category;
+        public final String name;
+
+        PendingSound(SoundCategory category, String name) {
+            this.category = category;
+            this.name = name;
+        }
+    }
+
+    private static final Map<String, PendingSound> PENDING_SOUNDS = new ConcurrentHashMap<>();
+
+    /**
+     * Remembers what a sound is before it is queued. The sound thread plays it later, by which time other sounds may
+     * have been queued, so a single "last sound" would give it their category (an interface sound's, say).
+     */
+    public static void rememberSound(String sourcename, SoundCategory category, String name) {
+        if (sourcename == null) return;
+        if (PENDING_SOUNDS.size() > MAX_PENDING_RANGES) PENDING_SOUNDS.clear();
+        PENDING_SOUNDS.put(sourcename, new PendingSound(category, name));
+    }
+
+    public static PendingSound takeSound(String sourcename) {
+        return sourcename == null ? null : PENDING_SOUNDS.remove(sourcename);
     }
 
     public static boolean shouldEvaluateEnvironment(int attenuationModel) {

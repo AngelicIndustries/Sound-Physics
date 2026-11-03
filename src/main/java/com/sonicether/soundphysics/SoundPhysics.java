@@ -361,9 +361,10 @@ public class SoundPhysics {
 			final Iterator<Map.Entry<Integer, float[]>> iterator = environments.entrySet().iterator();
 			while (iterator.hasNext()) {
 				final Map.Entry<Integer, float[]> entry = iterator.next();
+				// A stream can report itself stopped for a moment while it plays, so only forget sources OpenAL deleted;
+				// a reused source gets its own environment when its next sound plays.
 				final int sourceID = entry.getKey();
-				final int state = AL10.alIsSource(sourceID) ? AL10.alGetSourcei(sourceID, AL10.AL_SOURCE_STATE) : AL10.AL_STOPPED;
-				if (state == AL10.AL_PLAYING || state == AL10.AL_PAUSED) applyEnvironment(sourceID, entry.getValue());
+				if (AL10.alIsSource(sourceID)) applyEnvironment(sourceID, entry.getValue());
 				else iterator.remove();
 			}
 		}
