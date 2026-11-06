@@ -37,6 +37,9 @@ import java.util.ListIterator;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
 
 @Mod(modid = SoundPhysics.modid, name = SoundPhysics.modName, acceptedMinecraftVersions = SoundPhysics.mcVersion, version = SoundPhysics.version, guiFactory = "com.sonicether.soundphysics.SPGuiFactory",
@@ -59,6 +62,12 @@ public class SoundPhysics {
 	private static final Pattern uiPattern = Pattern.compile(".*\\/ui\\/.*");
 	private static final Pattern clickPattern = Pattern.compile(".*random.click.*");
 	private static final Pattern noteBlockPattern = Pattern.compile(".*note/.*");
+	private static final Pattern explosionPattern = Pattern.compile(".*explode.*");
+	private static final ScheduledExecutorService blastRecheck = Executors.newSingleThreadScheduledExecutor(task -> {
+		final Thread thread = new Thread(task, "Sound Physics blast recheck");
+		thread.setDaemon(true);
+		return thread;
+	});
 
 	@Mod.EventHandler
 	public void preInit(final FMLPreInitializationEvent event) {
@@ -429,12 +438,25 @@ public class SoundPhysics {
 		}
 		if (Config.noteBlockEnable && soundCat == SoundCategory.RECORDS && noteBlockPattern.matcher(soundName).matches()) soundCat = SoundCategory.BLOCKS;
 		evaluateEnvironment(sourceID, posX, posY, posZ,soundCat,soundName);
+		if (explosionPattern.matcher(soundName).matches()) recheckAfterBlast(new Source(sourceID, posX, posY, posZ, soundCat, soundName));
 		if (!Config.dynamicEnvironementEvalutaion) return;
 		if ((mc.thePlayer == null | mc.theWorld == null | posY <= 0 | soundCat == SoundCategory.RECORDS 
 		| soundCat == SoundCategory.MUSIC) || (Config.skipRainOcclusionTracing && rainPattern.matcher(soundName).matches())) return;
 		Source tmp = new Source(sourceID,posX,posY,posZ,soundCat,soundName);
 		if (source_check(tmp)) return;
 		source_list.add(tmp);
+	}
+
+	/**
+	 * An explosion's sound starts before the client removes the blocks it broke, so a blast under a floor would stay
+	 * muffled by that floor. Its occlusion is worked out again once the blocks are gone, if it still plays.
+	 */
+	private static void recheckAfterBlast(final Source source) {
+		blastRecheck.schedule(() -> {
+			if (AL10.alGetSourcei(source.sourceID, AL10.AL_SOURCE_STATE) != AL10.AL_PLAYING
+					|| AL10.alGetSourcei(source.sourceID, AL10.AL_BUFFER) != source.bufferID) return;
+			evaluateEnvironment(source.sourceID, source.posX, source.posY, source.posZ, source.category, source.name);
+		}, 150, TimeUnit.MILLISECONDS);
 	}
 
 	private static void removeTrackedSource(final int sourceID) {
