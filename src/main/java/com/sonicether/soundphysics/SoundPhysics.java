@@ -365,6 +365,9 @@ public class SoundPhysics {
 		float strongest = 0.0f;
 		for (final float request : muffleRequests.values()) strongest = Math.max(strongest, request);
 		if (Math.abs(strongest - muffle) < 0.01f && (strongest > 0.0f || muffle == 0.0f)) return true;
+		if (!Config.occlusionLogging.isEmpty() && (muffle == 0.0f) != (strongest == 0.0f)) {
+			log(strongest > 0.0f ? "Muffling at " + strongest + " for " + muffleRequests.keySet() : "Muffling stopped");
+		}
 		muffle = strongest;
 		synchronized (efxLock) {
 			final Iterator<Map.Entry<Integer, float[]>> iterator = environments.entrySet().iterator();
@@ -715,6 +718,8 @@ public class SoundPhysics {
 			Vec3 rayOrigin = Vec3.createVectorHelper(soundPos.xCoord, soundPos.yCoord, soundPos.zCoord);
 
 			float occlusionAccumulation = 0.0f;
+			final boolean logOcclusion = !Config.occlusionLogging.isEmpty() && name.contains(Config.occlusionLogging);
+			final StringBuilder blocksHit = new StringBuilder();
 
 			for (int i = 0; i < 10; i++) {
 				final MovingObjectPosition rayHit = mc.theWorld.rayTraceBlocks(rayOrigin, playerPos, true);
@@ -724,6 +729,7 @@ public class SoundPhysics {
 				}
 
 				final Block blockHit = mc.theWorld.getBlock(rayHit.blockX,rayHit.blockY,rayHit.blockZ);
+				if (logOcclusion) blocksHit.append(blocksHit.length() == 0 ? "" : ", ").append(Block.blockRegistry.getNameForObject(blockHit));
 
 				float blockOcclusion = 1.0f;
 
@@ -739,6 +745,7 @@ public class SoundPhysics {
 			}
 
 			directCutoff = (float) Math.exp(-occlusionAccumulation * absorptionCoeff);
+			final float occludedCutoff = directCutoff;
 			float directGain = (float) Math.pow(directCutoff, 0.1);
 
 			// Calculate reverb parameters for this sound
@@ -925,6 +932,12 @@ public class SoundPhysics {
 				sendCutoff1 *= 0.4f;
 				sendCutoff2 *= 0.4f;
 				sendCutoff3 *= 0.4f;
+			}
+
+			if (logOcclusion) {
+				log(String.format("%s %.1f blocks away, through [%s]: occlusion %.2f, direct cutoff %.2f (%.2f before shared airspace), direct gain %.2f, reverb sends %.2f %.2f %.2f %.2f, muffle %.2f%s",
+						name, playerPos.distanceTo(soundPos), blocksHit, occlusionAccumulation, directCutoff, occludedCutoff, directGain,
+						sendGain0, sendGain1, sendGain2, sendGain3, muffle, unmuffled.contains(sourceID) ? " (exempt)" : ""));
 			}
 
 			setEnvironment(sourceID, sendGain0, sendGain1, sendGain2, sendGain3, sendCutoff0, sendCutoff1, sendCutoff2,

@@ -51,6 +51,7 @@ public class Config {
 	public static boolean autoSteroDownmixLogging;
 	public static boolean debugInfoShow;
 	public static boolean injectorLogging;
+	public static String occlusionLogging;
 
 	private static final String categoryGeneral = "General";
 	private static final String categoryPerformance = "Performance";
@@ -158,6 +159,8 @@ public class Config {
 				"If true, Shows sources currently playing in the F3 debug info");
 		injectorLogging = this.forgeConfig.getBoolean("Injector Logging", categoryMisc, false,
 				"If true, Logs debug info about the injector");
+		occlusionLogging = this.forgeConfig.getString("Occlusion Logging", categoryMisc, "",
+				"Sounds whose file path contains this text (e.g. random/explode for explosions) log what blocks them and how muffled they get. Empty logs none.");
 
 		if (this.forgeConfig.hasChanged()) {
 			this.forgeConfig.save();
