@@ -651,7 +651,8 @@ public class SoundPhysics {
 
 			final Vec3 playerPos = Vec3.createVectorHelper(mc.thePlayer.posX, mc.thePlayer.posY + mc.thePlayer.getEyeHeight(), mc.thePlayer.posZ);
 			final Vec3 soundPos = offsetSoundByName(posX, posY, posZ, playerPos, name, category);
-			final Vec3 normalToPlayer = playerPos.subtract(soundPos).normalize();
+			// 1.7.10's a.subtract(b) is b - a, the other way round from later versions
+			final Vec3 normalToPlayer = soundPos.subtract(playerPos).normalize();
 
 			float snowFactor = 0.0f;
 
@@ -688,7 +689,8 @@ public class SoundPhysics {
 				(long)time 
 			);*/
 
-			Vec3 rayOrigin = soundPos;
+			// A copy: 1.7.10's ray trace moves its start vector along the ray, and the reverb rays below start from soundPos
+			Vec3 rayOrigin = Vec3.createVectorHelper(soundPos.xCoord, soundPos.yCoord, soundPos.zCoord);
 
 			float occlusionAccumulation = 0.0f;
 
