@@ -42,6 +42,7 @@ public class Config {
 	public static float clothReflectivity;
 	public static float sandReflectivity;
 	public static float snowReflectivity;
+	public static String[] blockReflectivityOverrides;
 
 	// compatibility
 	public static boolean computronicsPatching;
@@ -145,6 +146,10 @@ public class Config {
 				"Sound reflectivity for sand blocks.");
 		snowReflectivity = this.forgeConfig.getFloat("Snow Reflectivity", categoryMaterialProperties, 0.2f, 0.0f, 1.0f,
 				"Sound reflectivity for snow blocks.");
+		blockReflectivityOverrides = this.forgeConfig.getStringList("Block Reflectivity Overrides",
+				categoryMaterialProperties, new String[] { "dimdoors:Fabric of Reality:2=cloth" },
+				"Blocks whose reflectivity isn't their step sound's, one per line as modid:name[:metadata]=value. The value is one of the materials above (stone, wood, ground, foliage, metal, glass, cloth, sand, snow) or a number from 0 to 1. Dimensional Doors' Altered Fabric (Fabric of Reality, metadata 2) soaks up sound like wool.");
+		ReflectivityOverrides.load(blockReflectivityOverrides);
 
 		// compatibility
 		computronicsPatching = this.forgeConfig.getBoolean("Patch Computronics", categoryCompatibility, true,

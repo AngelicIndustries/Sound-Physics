@@ -553,7 +553,10 @@ public class SoundPhysics {
 		}
 	}
 
-	private static float getBlockReflectivity(final Block block) {
+	private static float getBlockReflectivity(final Block block, final int metadata) {
+		final float override = ReflectivityOverrides.get(block, metadata);
+		if (!Float.isNaN(override)) return override * Config.globalBlockReflectance;
+
 		final Block.SoundType soundType = block.stepSound;
 		final Material blockMaterial = block.getMaterial();
 
@@ -804,6 +807,7 @@ public class SoundPhysics {
 
 					// Additional bounces
 					Block lastHitBlock = mc.theWorld.getBlock(rayHit.blockX,rayHit.blockY,rayHit.blockZ);
+					int lastHitMetadata = mc.theWorld.getBlockMetadata(rayHit.blockX,rayHit.blockY,rayHit.blockZ);
 					Vec3 lastHitPos = rayHit.hitVec;
 					Vec3 lastHitNormal = getNormalFromFacing(rayHit.sideHit);
 					Vec3 lastRayDir = rayDir;
@@ -822,7 +826,7 @@ public class SoundPhysics {
 						final MovingObjectPosition newRayHit = mc.theWorld.rayTraceBlocks(newRayStart, newRayEnd, true);
 
 						float energyTowardsPlayer = 0.25f;
-						final float blockReflectivity = getBlockReflectivity(lastHitBlock);
+						final float blockReflectivity = getBlockReflectivity(lastHitBlock, lastHitMetadata);
 						energyTowardsPlayer *= blockReflectivity * 0.75f + 0.25f;
 
 						if (newRayHit == null) {
@@ -838,6 +842,7 @@ public class SoundPhysics {
 							lastHitNormal = getNormalFromFacing(newRayHit.sideHit);
 							lastRayDir = newRayDir;
 							lastHitBlock = mc.theWorld.getBlock(newRayHit.blockX,newRayHit.blockY,newRayHit.blockZ);
+							lastHitMetadata = mc.theWorld.getBlockMetadata(newRayHit.blockX,newRayHit.blockY,newRayHit.blockZ);
 
 							// Cast one final ray towards the player. If it's
 							// unobstructed, then the sound source and the player
