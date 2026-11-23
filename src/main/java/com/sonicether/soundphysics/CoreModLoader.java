@@ -56,6 +56,7 @@ public class CoreModLoader implements IFMLLoadingPlugin, IEarlyMixinLoader {
 		if (client) {
 			mixins.add("MixinSoundManagerStarterThread");
 			mixins.add("MixinSoundManager");
+			mixins.add("MixinSoundEventAccessorComposite");
 			mixins.add("MixinSourceLWJGLOpenAL");
 			if (Config.autoSteroDownmix) {
 				mixins.add("MixinLibraryLWJGLOpenAL");

@@ -19,12 +19,17 @@ import org.spongepowered.asm.mixin.injection.callback.LocalCapture;
 @Mixin(SoundManager.class)
 public abstract class MixinSoundManager {
 
+    @Inject(method = "playSound(Lnet/minecraft/client/audio/ISound;)V", at = @At("HEAD"))
+    private void startPick(ISound sound, CallbackInfo ci) {
+        SoundPhysics.startPick();
+    }
+
     @Inject(method = "playSound(Lnet/minecraft/client/audio/ISound;)V",
             at = @At(value = "INVOKE", target = "Lnet/minecraft/client/audio/SoundManager$SoundSystemStarterThread;play(Ljava/lang/String;)V", shift = At.Shift.BEFORE, remap = false),
             locals = LocalCapture.CAPTURE_FAILHARD)
     private void setLastNameAndCategory(ISound p_148611_1_, CallbackInfo ci, SoundEventAccessorComposite soundeventaccessorcomposite, SoundPoolEntry soundpoolentry, float f, float f1, SoundCategory soundcategory, float f2, double d0, ResourceLocation resourcelocation, boolean flag, String s) {
         // Before the play is queued, so the sound thread always finds it.
-        SoundPhysicsCompatibility.rememberSound(s, soundcategory, resourcelocation.toString());
+        SoundPhysicsCompatibility.rememberSound(s, soundcategory, resourcelocation.toString(), SoundPhysics.takePickedMuffle());
         SoundPhysics.setLastSoundName(resourcelocation.toString());
         SoundPhysics.setLastSoundCategory(soundcategory);
     }

@@ -13,6 +13,7 @@ import net.minecraft.entity.Entity;
 import net.minecraft.util.EnumFacing;
 import net.minecraft.util.MathHelper;
 import net.minecraft.util.MovingObjectPosition;
+import net.minecraft.util.ResourceLocation;
 import net.minecraft.util.Vec3;
 import net.minecraftforge.common.MinecraftForge;
 import org.lwjgl.BufferUtils;
@@ -127,6 +128,11 @@ public class SoundPhysics {
 	private static final Set<Integer> unmuffled = ConcurrentHashMap.newKeySet();
 	private static volatile float muffle;
 	private static volatile boolean efxReady;
+	// Sound events other mods muffle wherever they play (a jar's giggle, heard through its glass), and the muffle each
+	// source got from its event when it last started playing.
+	private static final Map<ResourceLocation, Float> eventMuffles = new ConcurrentHashMap<>();
+	private static final Map<Integer, Float> sourceMuffles = new ConcurrentHashMap<>();
+	private static float pickedMuffle;
 
 	/**
 	 * CALLED BY Mixin INJECTED CODE!
@@ -134,6 +140,7 @@ public class SoundPhysics {
 	public static void init() {
 		environments.clear();
 		unmuffled.clear();
+		sourceMuffles.clear();
 		setupEFX();
 		mc = Minecraft.getMinecraft();
 		setupThread();
@@ -384,6 +391,50 @@ public class SoundPhysics {
 	}
 
 	/**
+	 * Muffles a sound event wherever it plays, as if heard through glass or a wall, on top of its occlusion, reverb and
+	 * any setMuffle. It counts for events that play it through theirs ("type": "event" in sounds.json) too. It can be
+	 * set at any time, before the sound system starts as well, and holds for the sounds started after.
+	 *
+	 * @param soundEvent the event, as "modid:name"
+	 * @param amount     as for setMuffle: from 0, no muffling, to 1, only muffled lows at half volume
+	 */
+	public static void muffleSound(final String soundEvent, final float amount) {
+		final ResourceLocation event = new ResourceLocation(soundEvent);
+		if (amount > 0.001f) eventMuffles.put(event, Math.min(1.0f, amount));
+		else eventMuffles.remove(event);
+	}
+
+	/**
+	 * CALLED BY Mixin INJECTED CODE! Before a sound event picks the sound to play.
+	 */
+	public static void startPick() {
+		pickedMuffle = 0.0f;
+	}
+
+	/**
+	 * CALLED BY Mixin INJECTED CODE! For each event the pick goes through, the played one and those it plays through.
+	 */
+	public static void onPick(final ResourceLocation event) {
+		if (eventMuffles.isEmpty() || event == null) return;
+		final Float amount = eventMuffles.get(event);
+		if (amount != null) pickedMuffle = Math.max(pickedMuffle, amount);
+	}
+
+	/**
+	 * CALLED BY Mixin INJECTED CODE! The muffle the last pick's events asked for.
+	 */
+	public static float takePickedMuffle() {
+		final float picked = pickedMuffle;
+		pickedMuffle = 0.0f;
+		return picked;
+	}
+
+	/** How muffled a source is now: by the strongest of setMuffle (unless it's an interface sound) and its event. */
+	private static float muffleOf(final int sourceID) {
+		return Math.max(unmuffled.contains(sourceID) ? 0.0f : muffle, sourceMuffles.getOrDefault(sourceID, 0.0f));
+	}
+
+	/**
 	 * CALLED BY Mixin INJECTED CODE!
 	 */
 	public static void setLastSoundCategory(final SoundCategory sc) {
@@ -431,10 +482,20 @@ public class SoundPhysics {
 	 */
 	public static void onPlaySound(final float posX, final float posY, final float posZ, final int sourceID,
 			SoundCategory soundCat, String soundName, final int sourceAttenuationModel) {
+		onPlaySound(posX, posY, posZ, sourceID, soundCat, soundName, sourceAttenuationModel, 0.0f);
+	}
+
+	/**
+	 * CALLED BY Mixin INJECTED CODE!
+	 */
+	public static void onPlaySound(final float posX, final float posY, final float posZ, final int sourceID,
+			SoundCategory soundCat, String soundName, final int sourceAttenuationModel, final float eventMuffle) {
 		//log(String.valueOf(posX)+" "+String.valueOf(posY)+" "+String.valueOf(posZ)+" - "+String.valueOf(sourceID)+" - "+soundCat.toString()+" - "+soundName);
 		removeTrackedSource(sourceID);
 		if (soundCat == SoundCategory.MASTER) unmuffled.add(sourceID);
 		else unmuffled.remove(sourceID);
+		if (eventMuffle > 0.0f) sourceMuffles.put(sourceID, eventMuffle);
+		else sourceMuffles.remove(sourceID);
 		if (!SoundPhysicsCompatibility.shouldEvaluateEnvironment(sourceAttenuationModel)) {
 			clearEnvironment(sourceID);
 			return;
@@ -942,7 +1003,7 @@ public class SoundPhysics {
 			if (logOcclusion) {
 				log(String.format("%s %.1f blocks away, through [%s]: occlusion %.2f, direct cutoff %.2f (%.2f before shared airspace), direct gain %.2f, reverb sends %.2f %.2f %.2f %.2f, muffle %.2f%s",
 						name, playerPos.distanceTo(soundPos), blocksHit, occlusionAccumulation, directCutoff, occludedCutoff, directGain,
-						sendGain0, sendGain1, sendGain2, sendGain3, muffle, unmuffled.contains(sourceID) ? " (exempt)" : ""));
+						sendGain0, sendGain1, sendGain2, sendGain3, muffleOf(sourceID), unmuffled.contains(sourceID) ? " (exempt)" : ""));
 			}
 
 			setEnvironment(sourceID, sendGain0, sendGain1, sendGain2, sendGain3, sendCutoff0, sendCutoff1, sendCutoff2,
@@ -965,11 +1026,11 @@ public class SoundPhysics {
 	}
 
 	/**
-	 * Applies a source's environment with the current muffle on top. An empty environment means no occlusion or reverb.
+	 * Applies a source's environment with its muffle on top. An empty environment means no occlusion or reverb.
 	 * The filter objects are shared and filled per source, so the sound, environment and client threads take turns.
 	 */
 	private static void applyEnvironment(final int sourceID, final float[] environment) {
-		final float muffled = unmuffled.contains(sourceID) ? 0.0f : muffle;
+		final float muffled = muffleOf(sourceID);
 		final float highs = 1.0f - muffled, level = 1.0f - 0.5f * muffled;
 		synchronized (efxLock) {
 			if (environment.length == 0) {

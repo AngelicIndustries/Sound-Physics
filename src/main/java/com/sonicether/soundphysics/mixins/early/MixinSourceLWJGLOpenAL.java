@@ -50,7 +50,7 @@ public abstract class MixinSourceLWJGLOpenAL extends Source {
         }
         if (soundphysics$sound != null)
             SoundPhysics.onPlaySound(this.position.x, this.position.y, this.position.z, this.channelOpenAL.ALSource.get(0),
-                    soundphysics$sound.category, soundphysics$sound.name, this.attModel);
+                    soundphysics$sound.category, soundphysics$sound.name, this.attModel, soundphysics$sound.muffle);
         else // Played without Minecraft's sound manager (MAtmos, say): fall back to the last queued sound
             SoundPhysics.onPlaySound(this.position.x, this.position.y, this.position.z, this.channelOpenAL.ALSource.get(0),
                     this.attModel);

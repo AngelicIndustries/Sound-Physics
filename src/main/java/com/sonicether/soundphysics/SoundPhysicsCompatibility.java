@@ -45,14 +45,16 @@ public final class SoundPhysicsCompatibility {
         return range == null ? 1.0F : Math.max(1.0F, range / VANILLA_RANGE);
     }
 
-    /** A queued sound's category and name, by source name. */
+    /** A queued sound's category, name and the muffle its event asked for, by source name. */
     public static final class PendingSound {
         public final SoundCategory category;
         public final String name;
+        public final float muffle;
 
-        PendingSound(SoundCategory category, String name) {
+        PendingSound(SoundCategory category, String name, float muffle) {
             this.category = category;
             this.name = name;
+            this.muffle = muffle;
         }
     }
 
@@ -62,10 +64,10 @@ public final class SoundPhysicsCompatibility {
      * Remembers what a sound is before it is queued. The sound thread plays it later, by which time other sounds may
      * have been queued, so a single "last sound" would give it their category (an interface sound's, say).
      */
-    public static void rememberSound(String sourcename, SoundCategory category, String name) {
+    public static void rememberSound(String sourcename, SoundCategory category, String name, float muffle) {
         if (sourcename == null) return;
         if (PENDING_SOUNDS.size() > MAX_PENDING_RANGES) PENDING_SOUNDS.clear();
-        PENDING_SOUNDS.put(sourcename, new PendingSound(category, name));
+        PENDING_SOUNDS.put(sourcename, new PendingSound(category, name, muffle));
     }
 
     public static PendingSound takeSound(String sourcename) {

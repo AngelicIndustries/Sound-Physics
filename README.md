@@ -12,6 +12,7 @@ New in this fork:
 * Works with [MAtmos](https://github.com/AngelicIndustries/MAtmos): its ambience and item sounds keep their own levels instead of fading with distance or picking up echoes.
 * Loud sounds such as thunder and explosions carry as far as they should, and so do sounds whose range another mod sets.
 * Other mods can muffle all sounds, as [Enhanced Visuals Legacy](https://github.com/AngelicIndustries/EnhancedVisualsLegacy) does when an explosion goes off next to you or you are drowning.
+* Other mods can muffle their own sounds wherever they play (`SoundPhysics.muffleSound`), as [Eyes in the Shadows](https://github.com/AngelicIndustries/EyesInTheShadows) does for eyes giggling in a jar.
 * Sounds no longer inherit the echo or muffling of the sound that played before them, so paused and resumed ambience comes back clean.
 
 [![hub](images/badges/github.png)](https://github.com/AngelicIndustries/Sound-Physics/releases)
